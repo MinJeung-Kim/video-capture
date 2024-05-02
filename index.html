@@ -1,0 +1,120 @@
+<html>
+<header>
+    <script type="text/javascript" src="./js/jquery-3.6.3.min.js"></script>
+    <script src="./js/webrtc/umediastreamer.min.js"></script>
+    <script src="./js/webrtc/FileBufferReader.min.js"></script>
+    <script src="./js/webrtc/socket.io.min.js"></script>
+    <script src="./js/webrtc/underscore.js"></script>
+
+    <script src="./js/webrtc/rtcmulticonnection.min.js?v=221117_1"></script>
+    <script src="./js/webrtc/umediaplayer.min.js?v=221117_1"></script>
+    <script src="./js/webrtc/umediascript.min.js?v=221117_1"></script>
+    <script src="./js/webrtc/volumedetect.min.js?v=221117_1"></script>
+    <script type="text/javascript">
+        window.onload = () => {
+            // video, button 엘리먼트 취득
+            const $btn_start = document.querySelector("#btn_start");
+            const $btn_stop = document.querySelector("#btn_stop"); const $video_realtime = document.querySelector("#video_realtime");
+            const $video_record = document.querySelector("#video_record");
+
+
+            // MediaRecorder(녹화기) 변수 선언
+            let mediaRecorder = null;
+
+            // 영상 데이터를 담아줄 배열 선언
+            const arrVideoData = [];
+
+
+            // 시작 버튼 이벤트 처리
+            $btn_start.onclick = async function (event) {
+
+                // 카메라 입력영상 스트림 생성
+                const mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: true
+                });
+
+                // 실시간 영상 재생 처리: 첫번째 video태그에서 재생
+                $video_realtime.srcObject = mediaStream;
+                $video_realtime.onloadedmetadata = (event) => {
+                    $video_realtime.play();
+                }
+
+                // mediaRecorder객체(녹화기) 생성
+                mediaRecorder = new MediaRecorder(mediaStream);
+
+
+                // 녹화 데이터 입력 이벤트 처리
+                mediaRecorder.ondataavailable = (event) => {
+                    // 녹화 데이터(Blob)가 들어올 때마다 배열에 담아두기
+                    arrVideoData.push(event.data);
+                }
+
+
+                // 녹화 종료 이벤트 처리
+                mediaRecorder.onstop = (event) => {
+                    // 배열에 담아둔 녹화 데이터들을 통합한 Blob객체 생성
+                    const videoBlob = new Blob(arrVideoData, { type: 'video/webm' });
+
+                    // BlobURL(ObjectURL) 생성
+                    const blobURL = window.URL.createObjectURL(videoBlob);
+
+                    // 녹화된 영상 재생: 두번째 video태그에서 재생
+                    $video_record.src = blobURL;
+                    $video_record.play();
+
+                    // 기존 녹화 데이터 제거
+                    arrVideoData.splice(0);
+
+                    // 서버로 Blob 데이터 보내기
+                    uploadVideo(videoBlob);
+
+                }
+
+                // 녹화 시작!
+                mediaRecorder.start();
+            }
+
+            function uploadVideo(blob) {
+                console.log('Uploading blob of size:', blob.size); // Blob 크기 로깅
+
+                const formData = new FormData();
+                formData.append('video', blob, 'recording.webm');
+                for (let [key, value] of formData.entries()) {
+                    console.log('Form Data prepared for upload:', `${key}:`, value);
+                }
+
+                fetch('https://example.com/upload', { // 서버의 업로드 URL
+                    method: 'POST',
+                    body: formData,
+                })
+                    .then(response => {
+                        console.log('Server response received:', response); // 서버 응답 로깅
+                        return response.json(); // JSON 형식으로 변환
+                    })
+                    .then(data => {
+                        console.log('Success:', data); // 성공 시 서버로부터 받은 데이터 로깅
+                    })
+                    .catch((error) => {
+                        console.error('Error:', error); // 오류 로깅
+                    });
+            }
+
+            // 종료 버튼 이벤트 처리
+            $btn_stop.onclick = (event) => {
+                // 녹화 종료!
+                mediaRecorder.stop();
+            }
+        };
+    </script>
+</header>
+
+<body>
+    <button id="btn_start">시작</button>
+    <button id="btn_stop">정지</button>
+    <br><br>
+    <video id="video_realtime" controls>실시간 영상 재생용</video>
+    <video id="video_record" controls>녹화된 영상 재생용</video>
+</body>
+
+</html>
